@@ -1,0 +1,6 @@
+streamlit>=1.32.0
+pandas
+altair
+snowflake-connector-python
+snowflake-snowpark-python
+pyarrow<19.0.0
