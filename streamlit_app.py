@@ -101,9 +101,17 @@ def login_signup_interface():
                     st.session_state.logged_in = True
                     st.session_state.username = username
                     st.success(msg)
-                    st.rerun()
+                    st.experimental_rerun()
                 else:
                     st.error(msg)
+
+    # 👇 Salesforce Login Button
+    st.markdown("---")
+    st.subheader("Or login with Salesforce")
+    if st.button("Login with Salesforce", use_container_width=True):
+        st.experimental_set_query_params(oauth="salesforce")
+        login_url = get_salesforce_login_url()
+        st.markdown(f"[Click here to login with Salesforce]({login_url})", unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
@@ -276,19 +284,69 @@ def render_chat_interface():
         st.session_state.pending_question = question
         st.rerun()
 
+
+from authlib.integrations.requests_client import OAuth2Session
+import os
+
+SF_CLIENT_ID = st.secrets["SF_CLIENT_ID"]
+SF_CLIENT_SECRET = st.secrets["SF_CLIENT_SECRET"]
+SF_AUTH_URL = "https://login.salesforce.com/services/oauth2/authorize"
+SF_TOKEN_URL = "https://login.salesforce.com/services/oauth2/token"
+SF_USERINFO_URL = "https://login.salesforce.com/services/oauth2/userinfo"
+REDIRECT_URI = "https://nlp-dashboard-2.streamlit.app/oauth/callback"
+
+def get_salesforce_login_url():
+    oauth = OAuth2Session(SF_CLIENT_ID, SF_CLIENT_SECRET, redirect_uri=REDIRECT_URI)
+    url, state = oauth.create_authorization_url(SF_AUTH_URL, scope="openid profile email")
+    st.session_state['oauth_state'] = state
+    return url
+
+def handle_salesforce_callback():
+    if "code" in st.experimental_get_query_params():
+        code = st.experimental_get_query_params()["code"][0]
+        oauth = OAuth2Session(SF_CLIENT_ID, SF_CLIENT_SECRET, redirect_uri=REDIRECT_URI)
+        token = oauth.fetch_token(SF_TOKEN_URL, code=code)
+        userinfo = oauth.get(SF_USERINFO_URL, token=token).json()
+        email = userinfo.get("email")
+        name = userinfo.get("name")
+        # Check if email exists in Snowflake or auto-register
+        st.session_state['logged_in'] = True
+        st.session_state['username'] = name
+        st.session_state['email'] = email
+        st.success(f"Welcome, {name}")
+        st.experimental_rerun()
+
+
+
+
+
+
+
 # ---------------- MAIN ------------------
 def main():
+    # 🔐 Handle Salesforce OAuth Callback
+    query_params = st.experimental_get_query_params()
+    if "code" in query_params and "oauth_state" in st.session_state:
+        handle_salesforce_callback()
+        return  # Prevent further execution during callback
+
+    # 🟦 Render login page if not authenticated
     if not st.session_state.get("logged_in"):
         login_signup_interface()
+
+    # 🟩 Initialize and load chat interface
     initialize_session_state()
     if not st.session_state.chat_initialized:
         _, _ = call_cortex_analyst_procedure("Help me get started")
         st.session_state.chat_initialized = True
+
     if st.session_state.pending_question:
         q = st.session_state.pending_question
         st.session_state.pending_question = None
         process_user_question(q)
+
     render_chat_interface()
+
 
 if __name__ == "__main__":
     main()
