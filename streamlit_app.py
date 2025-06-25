@@ -1,99 +1,122 @@
 import streamlit as st
 import requests
 import os
-import base64
 import hashlib
-import secrets
-import urllib.parse
+import base64
+import json
+from urllib.parse import urlencode
 
-# ------------------------- Configuration -------------------------
-SF_CLIENT_ID = st.secrets["oauth"]["SF_CLIENT_ID"]
-SF_REDIRECT_URI = "https://nlp-dashboard-2.streamlit.app/oauth/callback"
+# ======================== CONFIGURATION ============================
 SF_AUTH_URL = "https://login.salesforce.com/services/oauth2/authorize"
 SF_TOKEN_URL = "https://login.salesforce.com/services/oauth2/token"
+SF_API_BASE = "https://your_instance.salesforce.com/services/data/v59.0"
+REDIRECT_URI = "https://nlp-dashboard-2.streamlit.app/oauth/callback"
 
-# ------------------------- PKCE Helper ---------------------------
+# From Streamlit secrets
+SF_CLIENT_ID = st.secrets["oauth"]["SF_CLIENT_ID"]
+SF_CLIENT_SECRET = st.secrets["oauth"]["SF_CLIENT_SECRET"]
+
+# ======================== UTILITIES ============================
 def generate_pkce_pair():
-    code_verifier = base64.urlsafe_b64encode(os.urandom(40)).rstrip(b'=').decode('utf-8')
+    code_verifier = base64.urlsafe_b64encode(os.urandom(40)).decode("utf-8").rstrip("=")
     code_challenge = base64.urlsafe_b64encode(
         hashlib.sha256(code_verifier.encode()).digest()
-    ).rstrip(b'=').decode('utf-8')
+    ).decode("utf-8").rstrip("=")
     return code_verifier, code_challenge
 
-# ------------------------- Auth URL Generator ---------------------
 def get_salesforce_login_url():
     code_verifier, code_challenge = generate_pkce_pair()
-    state = secrets.token_urlsafe(16)
+    state = base64.urlsafe_b64encode(os.urandom(16)).decode("utf-8").rstrip("=")
 
+    st.session_state["code_verifier"] = code_verifier
     st.session_state["oauth_state"] = state
-    st.session_state["pkce_verifier"] = code_verifier
 
     params = {
         "response_type": "code",
         "client_id": SF_CLIENT_ID,
-        "redirect_uri": SF_REDIRECT_URI,
+        "redirect_uri": REDIRECT_URI,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
         "scope": "openid profile email",
         "state": state,
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256"
     }
-    return f"{SF_AUTH_URL}?{urllib.parse.urlencode(params)}"
+    return f"{SF_AUTH_URL}?{urlencode(params)}"
 
-# ------------------------- Token Exchange -------------------------
-def handle_salesforce_callback():
-    query_params = st.query_params
-    code = query_params.get("code")
-    state = query_params.get("state")
+def handle_salesforce_callback(code):
+    with st.spinner("🔐 Exchanging token with Salesforce..."):
+        data = {
+            "grant_type": "authorization_code",
+            "client_id": SF_CLIENT_ID,
+            "code": code,
+            "redirect_uri": REDIRECT_URI,
+            "code_verifier": st.session_state.get("code_verifier"),
+        }
+        response = requests.post(SF_TOKEN_URL, data=data)
 
-    if not code:
-        st.error("Missing authorization code.")
+        if response.status_code != 200:
+            st.error(f"❌ Token exchange failed: {response.text}")
+            st.stop()
+
+        token_data = response.json()
+        st.session_state["access_token"] = token_data["access_token"]
+        st.session_state["instance_url"] = token_data["instance_url"]
+        st.success("✅ Logged in with Salesforce successfully.")
+
+# ======================== SALESFORCE API ============================
+def fetch_salesforce_accounts():
+    access_token = st.session_state.get("access_token")
+    instance_url = st.session_state.get("instance_url")
+
+    if not access_token or not instance_url:
+        st.error("You are not authenticated.")
         return
 
-    if "oauth_state" not in st.session_state or state != st.session_state["oauth_state"]:
-        st.error("OAuth state mismatch.")
-        return
-
-    code_verifier = st.session_state.get("pkce_verifier")
-    if not code_verifier:
-        st.error("Missing code verifier in session.")
-        return
-
-    payload = {
-        "grant_type": "authorization_code",
-        "code": code,
-        "client_id": SF_CLIENT_ID,
-        "redirect_uri": SF_REDIRECT_URI,
-        "code_verifier": code_verifier
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
     }
+    with st.spinner("📡 Fetching accounts from Salesforce..."):
+        response = requests.get(
+            f"{instance_url}/services/data/v59.0/query/", 
+            headers=headers,
+            params={"q": "SELECT Id, Name, Type, Industry FROM Account LIMIT 20"}
+        )
 
-    with st.spinner("Exchanging code for tokens..."):
-        response = requests.post(SF_TOKEN_URL, data=payload)
+        if response.status_code == 200:
+            records = response.json().get("records", [])
+            return records
+        else:
+            st.error(f"❌ Failed to fetch accounts: {response.text}")
+            return []
 
-    if response.status_code == 200:
-        tokens = response.json()
-        st.session_state["salesforce_tokens"] = tokens
-        st.success("✅ Logged in via Salesforce!")
-        st.write(tokens)
-    else:
-        st.error(f"Token exchange failed: {response.text}")
+# ======================== UI HANDLING ============================
+def show_account_data():
+    accounts = fetch_salesforce_accounts()
+    if accounts:
+        st.success("✅ Retrieved Account Records")
+        st.dataframe(accounts, use_container_width=True)
 
-# ------------------------- Main Streamlit App ---------------------
 def main():
-    st.title("🔐 Salesforce Login Demo with PKCE")
+    st.set_page_config(page_title="Salesforce OAuth Demo", layout="centered")
+    st.title("🔐 Salesforce OAuth2 + PKCE Integration")
 
+    # Handle callback
     query_params = st.query_params
     if "code" in query_params and "state" in query_params:
-        handle_salesforce_callback()
-        st.stop()
+        if "oauth_state" in st.session_state and query_params["state"] == st.session_state["oauth_state"]:
+            handle_salesforce_callback(query_params["code"])
+            st.rerun()
+        else:
+            st.error("🔐 Invalid OAuth state.")
+            st.stop()
 
-    if st.button("Login with Salesforce", use_container_width=True):
-        login_url = get_salesforce_login_url()
-        st.markdown(f"[Click here to login with Salesforce]({login_url})", unsafe_allow_html=True)
-
-    # Show token if already logged in
-    if "salesforce_tokens" in st.session_state:
-        st.success("Already logged in")
-        st.json(st.session_state["salesforce_tokens"])
+    if "access_token" in st.session_state:
+        st.success("🔓 Authenticated with Salesforce")
+        show_account_data()
+    else:
+        if st.button("Login with Salesforce", use_container_width=True):
+            login_url = get_salesforce_login_url()
+            st.markdown(f"[🔗 Click here to login with Salesforce]({login_url})")
 
 if __name__ == "__main__":
     main()
