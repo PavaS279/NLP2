@@ -119,7 +119,7 @@ def main():
     elif st.button("Login with Salesforce"):
         login_url = get_salesforce_login_url()
         st.markdown(
-            f'<meta http-equiv="refresh" content="0;url={login_url}">',
+            f'<a href="{login_url}" target="_self"><button style="width: 100%; padding: 10px; font-size: 16px;">🔐 Click here to login with Salesforce</button></a>',
             unsafe_allow_html=True
         )
         st.stop()
