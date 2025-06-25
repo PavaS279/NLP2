@@ -11,7 +11,7 @@ import hashlib
 import uuid
 import bcrypt
 
-# get connection
+# get connections
 cnx = st.connection("snowflake")
 session = cnx.session()
 
