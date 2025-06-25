@@ -101,7 +101,7 @@ def login_signup_interface():
                     st.session_state.logged_in = True
                     st.session_state.username = username
                     st.success(msg)
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error(msg)
 
@@ -185,7 +185,7 @@ def process_user_question(question: str):
             display_suggestions(suggestions)
     st.session_state.messages.append({"role": "assistant", "content": response_content, "timestamp": datetime.now()})
     time.sleep(0.5)
-    st.experimental_rerun()
+    st.rerun()
 
 # ---------------- RESPONSE EXTRACTORS ------------------
 def extract_sql_from_response(content: Dict) -> Optional[str]:
@@ -250,7 +250,7 @@ def display_suggestions(suggestions: List[str]):
         for i, s in enumerate(suggestions):
             if cols[i % 2].button(s, key=f"sugg_{i}"):
                 st.session_state.pending_question = s
-                st.experimental_rerun()
+                st.rerun()
 
 # ---------------- CHAT RENDER ------------------
 def render_chat_interface():
@@ -274,7 +274,7 @@ def render_chat_interface():
     question = st.chat_input("Ask me anything about your data")
     if question:
         st.session_state.pending_question = question
-        st.experimental_rerun()
+        st.rerun()
 
 # ---------------- MAIN ------------------
 def main():
