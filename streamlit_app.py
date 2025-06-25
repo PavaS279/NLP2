@@ -517,3 +517,6 @@ def main():
     send_welcome_message()
     render_chat_interface()
 
+
+if __name__ == "__main__":
+    main()
