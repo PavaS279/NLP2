@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 import asyncio
 from datetime import datetime
 
-# ======================== CONFIGURATION ============================
+# ======================== CONFIGURATION =============================
 # Use your specific Salesforce instance URL
 SF_INSTANCE_URL = "https://orgfarm-946eb54298-dev-ed.develop.my.salesforce.com"
 SF_AUTH_URL = f"{SF_INSTANCE_URL}/services/oauth2/authorize"
