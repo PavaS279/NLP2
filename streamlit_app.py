@@ -10,14 +10,22 @@ import asyncio
 from datetime import datetime
 
 # ======================== CONFIGURATION ============================
-SF_AUTH_URL = "https://login.salesforce.com/services/oauth2/authorize"
-SF_TOKEN_URL = "https://login.salesforce.com/services/oauth2/token"
-SF_API_BASE = None
+# Use your specific Salesforce instance URL
+SF_INSTANCE_URL = "https://orgfarm-946eb54298-dev-ed.develop.my.salesforce.com"
+SF_AUTH_URL = f"{SF_INSTANCE_URL}/services/oauth2/authorize"
+SF_TOKEN_URL = f"{SF_INSTANCE_URL}/services/oauth2/token"
+SF_API_BASE = f"{SF_INSTANCE_URL}/services/data/v59.0"
+
+# Make sure this matches your Salesforce Connected App redirect URI exactly
 REDIRECT_URI = "https://nlp-dashboard-2.streamlit.app/oauth/callback"
 
-# From Streamlit secrets
-SF_CLIENT_ID = st.secrets["oauth"]["SF_CLIENT_ID"]
-SF_CLIENT_SECRET = st.secrets["oauth"]["SF_CLIENT_SECRET"]
+# From Streamlit secrets - make sure these are set correctly
+try:
+    SF_CLIENT_ID = st.secrets["oauth"]["SF_CLIENT_ID"]
+    SF_CLIENT_SECRET = st.secrets["oauth"]["SF_CLIENT_SECRET"]
+except KeyError as e:
+    st.error(f"Missing Streamlit secret: {e}")
+    st.stop()
 
 # ======================== CUSTOM CSS ============================
 def load_custom_css():
@@ -251,7 +259,7 @@ def get_salesforce_login_url():
             "redirect_uri": REDIRECT_URI,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
-            "scope": "openid profile email api refresh_token",
+            "scope": "api refresh_token",  # Simplified scope for dev org
             "state": state,
         }
         return f"{SF_AUTH_URL}?{urlencode(params)}"
@@ -423,6 +431,15 @@ def show_login_page():
         </div>
         """, unsafe_allow_html=True)
         
+        # Show current configuration for debugging
+        with st.expander("🔧 Configuration Info", expanded=False):
+            st.code(f"""
+Salesforce Instance: {SF_INSTANCE_URL}
+Auth URL: {SF_AUTH_URL}
+Redirect URI: {REDIRECT_URI}
+Client ID: {SF_CLIENT_ID[:10]}...
+            """)
+        
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("🚀 Login with Salesforce", key="login_btn", use_container_width=True):
@@ -447,6 +464,32 @@ def show_login_page():
                         </a>
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                    # Show the generated URL for debugging
+                    with st.expander("🔍 Debug - Generated URL", expanded=False):
+                        st.code(login_url)
+        
+        # Add troubleshooting section
+        st.markdown("---")
+        st.markdown("### 🛠️ Troubleshooting")
+        st.markdown("""
+        **If you're getting connection refused errors:**
+        
+        1. **Check Connected App Settings in Salesforce:**
+           - Go to Setup → App Manager → Your Connected App
+           - Ensure "Enable OAuth Settings" is checked
+           - Verify the Callback URL matches exactly: `https://nlp-dashboard-2.streamlit.app/oauth/callback`
+           - Make sure "Use digital signatures" is unchecked (unless you have a certificate)
+           
+        2. **OAuth Policies:**
+           - Set "Permitted Users" to "All users may self-authorize"
+           - Set "IP Relaxation" to "Relax IP restrictions"
+           
+        3. **Required OAuth Scopes:**
+           - Add "Perform requests at any time (refresh_token, offline_access)"
+           - Add "Access the identity URL service (id, profile, email, address, phone)"
+           - Add "Access and manage your data (api)"
+        """)
         
         # Add features section
         st.markdown("""
