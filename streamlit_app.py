@@ -15,8 +15,8 @@ cnx = st.connection("snowflake")
 session = cnx.session()
 
 # OAuth constants
-SF_CLIENT_ID = st.secrets["SF_CLIENT_ID"]
-SF_CLIENT_SECRET = st.secrets["SF_CLIENT_SECRET"]
+SF_CLIENT_ID = st.secrets["oauth"]["SF_CLIENT_ID"]
+SF_CLIENT_SECRET = st.secrets["oauth"]["SF_CLIENT_SECRET"]
 REDIRECT_URI = "https://nlp-dashboard-2.streamlit.app/oauth/callback"
 SF_AUTH_URL = "https://login.salesforce.com/services/oauth2/authorize"
 SF_TOKEN_URL = "https://login.salesforce.com/services/oauth2/token"
@@ -44,7 +44,7 @@ def get_salesforce_login_url():
     return url
 
 def handle_salesforce_callback():
-    query_params = st.experimental_get_query_params()
+    query_params = st.query_params
     if "code" in query_params:
         code = query_params["code"][0]
         code_verifier = st.session_state.get("code_verifier")
@@ -162,7 +162,7 @@ def login_signup_interface():
     st.stop()
 
 def main():
-    query_params = st.experimental_get_query_params()
+    query_params = st.query_params()
     if "code" in query_params and "oauth_state" in st.session_state:
         handle_salesforce_callback()
         return
