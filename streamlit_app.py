@@ -97,26 +97,32 @@ def show_account_data():
         st.dataframe(accounts, use_container_width=True)
 
 def main():
-    st.set_page_config(page_title="Salesforce OAuth Demo")
+    st.set_page_config(page_title="Salesforce OAuth Demo", layout="centered")
     st.title("🔐 Salesforce OAuth2 + PKCE")
 
-    # ➤ Read query params correctly
+    # Handle OAuth callback
     query_params = st.query_params
-
     if "code" in query_params and "state" in query_params:
         if query_params["state"] == st.session_state.get("oauth_state"):
             handle_salesforce_callback(query_params["code"])
             st.rerun()
         else:
-            st.error("❌ Invalid OAuth state")
+            st.error("❌ Invalid OAuth state.")
             st.stop()
 
+    # If logged in, show data
     if "access_token" in st.session_state:
-        st.success("Logged in, ready to show data")
+        st.success("🔓 Authenticated with Salesforce")
         show_account_data()
+
+    # 🔽 🔽 🔽 ADD THIS BLOCK BELOW
     elif st.button("Login with Salesforce"):
         login_url = get_salesforce_login_url()
-        st.experimental_redirect(login_url)
+        st.markdown(
+            f'<meta http-equiv="refresh" content="0;url={login_url}">',
+            unsafe_allow_html=True
+        )
+        st.stop()
 
 if __name__ == "__main__":
     main()
