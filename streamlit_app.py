@@ -162,7 +162,7 @@ def login_signup_interface():
     st.stop()
 
 def main():
-    query_params = st.query_params()
+    query_params = st.query_params
     if "code" in query_params and "oauth_state" in st.session_state:
         handle_salesforce_callback()
         return
