@@ -12,7 +12,7 @@ from datetime import datetime
 # Use the working Salesforce configuration from your code
 SF_AUTH_URL = "https://login.salesforce.com/services/oauth2/authorize"
 SF_TOKEN_URL = "https://login.salesforce.com/services/oauth2/token"
-SF_API_BASE = "https://orgfarm-946eb54298-dev-ed.develop.my.salesforce.com/services/data/v59.0"
+SF_API_BASE = None    #"https://orgfarm-946eb54298-dev-ed.develop.my.salesforce.com/services/data/v59.0"
 REDIRECT_URI = "https://nlp-dashboard-2.streamlit.app/oauth/callback"
 
 # From Streamlit secrets
