@@ -6,3 +6,5 @@ altair==5.3.0
 pyarrow<19.0.0
 setuptools<81
 bcrypt
+authlib
+requests
