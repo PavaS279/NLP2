@@ -8,8 +8,10 @@ import altair as alt
 import numpy as np
 import re
 import hashlib
+import uuid
+import bcrypt
 
-# g
+# get connection
 cnx = st.connection("snowflake")
 session = cnx.session()
 
@@ -436,15 +438,83 @@ def render_chat_interface():
         st.session_state.pending_question = question
         st.rerun()
 
+
+# Helper to hash password
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+# Helper to verify password
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
+# Create user account
+def create_user(username: str, email: str, password: str) -> Tuple[bool, str]:
+    try:
+        user_id = str(uuid.uuid4())
+        hashed_pw = hash_password(password)
+        session.sql(f"""
+            INSERT INTO CORTEX_ANALYST.CORTEX_AI.USER_CREDENTIALS
+            (USER_ID, USERNAME, EMAIL, PASSWORD_HASH)
+            VALUES ('{user_id}', '{username}', '{email}', '{hashed_pw}')
+        """).collect()
+        return True, "✅ Account created successfully."
+    except Exception as e:
+        return False, f"❌ Error creating user: {str(e)}"
+
+# Authenticate user
+def authenticate_user(username: str, password: str) -> Tuple[bool, str]:
+    try:
+        result = session.sql(f"""
+            SELECT PASSWORD_HASH FROM CORTEX_ANALYST.CORTEX_AI.USER_CREDENTIALS
+            WHERE USERNAME = '{username}'
+        """).to_pandas()
+
+        if not result.empty:
+            hashed = result.iloc[0]['PASSWORD_HASH']
+            if verify_password(password, hashed):
+                session.sql(f"""
+                    UPDATE CORTEX_ANALYST.CORTEX_AI.USER_CREDENTIALS
+                    SET LAST_LOGIN = CURRENT_TIMESTAMP
+                    WHERE USERNAME = '{username}'
+                """).collect()
+                return True, "✅ Login successful."
+            else:
+                return False, "❌ Incorrect password."
+        else:
+            return False, "❌ Username not found."
+    except Exception as e:
+        return False, f"❌ Error: {str(e)}"
+
+def login_signup_interface():
+    st.title("🔐 Secure Login to Cortex Analyst")
+    mode = st.radio("Select Mode", ["Login", "Sign Up"], horizontal=True)
+
+    username = st.text_input("Username")
+    email = st.text_input("Email (Sign Up only)", disabled=(mode == "Login"))
+    password = st.text_input("Password", type="password")
+
+    if st.button("Submit"):
+        if mode == "Sign Up":
+            success, msg = create_user(username, email, password)
+            st.success(msg) if success else st.error(msg)
+        else:
+            success, msg = authenticate_user(username, password)
+            if success:
+                st.session_state.logged_in = True
+                st.session_state.username = username
+                st.success(msg)
+                st.experimental_rerun()
+            else:
+                st.error(msg)
+
+    st.stop()
+
 def main():
-    """Main Streamlit application."""
-    # Initialize session state
+    if not st.session_state.get("logged_in"):
+        login_signup_interface()
+        
     initialize_session_state()
-    
-    # Send welcome message on first load
     send_welcome_message()
-    
-    # Render chat interface
     render_chat_interface()
 
 if __name__ == "__main__":
