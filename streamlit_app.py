@@ -503,7 +503,7 @@ def login_signup_interface():
                 st.session_state.logged_in = True
                 st.session_state.username = username
                 st.success(msg)
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error(msg)
 
@@ -517,5 +517,3 @@ def main():
     send_welcome_message()
     render_chat_interface()
 
-if __name__ == "__main__":
-    main()
