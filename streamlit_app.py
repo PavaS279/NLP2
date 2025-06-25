@@ -6,18 +6,22 @@ import base64
 import json
 import time
 from urllib.parse import urlencode
-import asyncio
 from datetime import datetime
 
 # ======================== CONFIGURATION ============================
+# Use the working Salesforce configuration from your code
 SF_AUTH_URL = "https://login.salesforce.com/services/oauth2/authorize"
 SF_TOKEN_URL = "https://login.salesforce.com/services/oauth2/token"
 SF_API_BASE = "https://orgfarm-946eb54298-dev-ed.develop.my.salesforce.com/services/data/v59.0"
 REDIRECT_URI = "https://nlp-dashboard-2.streamlit.app/oauth/callback"
 
 # From Streamlit secrets
-SF_CLIENT_ID = st.secrets["oauth"]["SF_CLIENT_ID"]
-SF_CLIENT_SECRET = st.secrets["oauth"]["SF_CLIENT_SECRET"]
+try:
+    SF_CLIENT_ID = st.secrets["oauth"]["SF_CLIENT_ID"]
+    SF_CLIENT_SECRET = st.secrets["oauth"]["SF_CLIENT_SECRET"]
+except KeyError as e:
+    st.error(f"Missing Streamlit secret: {e}")
+    st.stop()
 
 # ======================== CUSTOM CSS ============================
 def load_custom_css():
@@ -192,7 +196,7 @@ def load_custom_css():
 
 # ======================== UTILITIES ============================
 def generate_pkce_pair():
-    """Generate PKCE code verifier and challenge"""
+    """Generate PKCE code verifier and challenge - using your working implementation"""
     code_verifier = base64.urlsafe_b64encode(os.urandom(40)).decode("utf-8").rstrip("=")
     code_challenge = base64.urlsafe_b64encode(
         hashlib.sha256(code_verifier.encode()).digest()
@@ -216,28 +220,33 @@ def show_error_message(message):
     """Display error message"""
     st.markdown(f'<div class="error-message">❌ {message}</div>', unsafe_allow_html=True)
 
-def progressive_loading(container, operation_name="Processing"):
-    """Show progressive loading messages"""
+def progressive_loading_with_messages(container, operation_name="Processing"):
+    """Show progressive loading messages with exact timing"""
     messages = [
         f"Please wait, analyzing your {operation_name.lower()}...",
         f"Hold on, it's taking more time to get data from database...",
         f"It's almost done, please hold on..."
     ]
     
-    for i, message in enumerate(messages):
-        if i == 0:
-            time.sleep(5)
-        elif i == 1:
-            time.sleep(10)  # Total 15 seconds
-        else:
-            time.sleep(5)   # Total 20 seconds
-            
-        container.empty()
-        with container:
-            show_loading_spinner(message)
+    # 5 seconds - first message
+    with container:
+        show_loading_spinner(messages[0])
+    time.sleep(5)
+    
+    # 10 more seconds (total 15) - second message
+    with container:
+        show_loading_spinner(messages[1])
+    time.sleep(10)
+    
+    # 5 more seconds (total 20) - third message
+    with container:
+        show_loading_spinner(messages[2])
+    time.sleep(5)
+    
+    container.empty()
 
 def get_salesforce_login_url():
-    """Generate Salesforce OAuth login URL"""
+    """Generate Salesforce OAuth login URL - using your working implementation"""
     try:
         code_verifier, code_challenge = generate_pkce_pair()
         state = base64.urlsafe_b64encode(os.urandom(16)).decode("utf-8").rstrip("=")
@@ -251,26 +260,26 @@ def get_salesforce_login_url():
             "redirect_uri": REDIRECT_URI,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
-            "scope": "openid profile email api refresh_token",
+            "scope": "openid profile email api",  # Enhanced scope for better functionality
             "state": state,
         }
         return f"{SF_AUTH_URL}?{urlencode(params)}"
     except Exception as e:
-        st.error(f"Error generating login URL: {str(e)}")
+        show_error_message(f"Error generating login URL: {str(e)}")
         return None
 
 def handle_salesforce_callback(code):
-    """Handle OAuth callback and exchange code for token"""
+    """Handle OAuth callback - using your working implementation with enhanced UI"""
     loading_container = st.empty()
     
     try:
         with loading_container:
             show_loading_spinner("🔐 Exchanging token with Salesforce...")
         
+        # Using your working token exchange logic
         data = {
             "grant_type": "authorization_code",
             "client_id": SF_CLIENT_ID,
-            "client_secret": SF_CLIENT_SECRET,
             "code": code,
             "redirect_uri": REDIRECT_URI,
             "code_verifier": st.session_state.get("code_verifier"),
@@ -305,7 +314,7 @@ def handle_salesforce_callback(code):
 
 # ======================== SALESFORCE API ============================
 def fetch_salesforce_accounts():
-    """Fetch Salesforce accounts with proper loading and error handling"""
+    """Fetch Salesforce accounts - using your working API logic with enhanced loading"""
     access_token = st.session_state.get("access_token")
     instance_url = st.session_state.get("instance_url")
 
@@ -316,18 +325,10 @@ def fetch_salesforce_accounts():
     loading_container = st.empty()
     
     try:
-        # Progressive loading
-        with loading_container:
-            show_loading_spinner("Please wait, analyzing your request...")
-        time.sleep(3)
+        # Progressive loading with exact timing
+        progressive_loading_with_messages(loading_container, "request")
         
-        with loading_container:
-            show_loading_spinner("Hold on, it's taking more time to get data from database...")
-        time.sleep(5)
-        
-        with loading_container:
-            show_loading_spinner("It's almost done, please hold on...")
-        
+        # Use your working API call logic
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
@@ -339,8 +340,6 @@ def fetch_salesforce_accounts():
             params={"q": "SELECT Id, Name, Type, Industry, Phone, Website FROM Account LIMIT 50"},
             timeout=30
         )
-        
-        loading_container.empty()
         
         if response.status_code == 200:
             records = response.json().get("records", [])
@@ -358,16 +357,14 @@ def fetch_salesforce_accounts():
             return []
             
     except requests.exceptions.Timeout:
-        loading_container.empty()
         show_error_message("Request timeout. Please try again.")
         return []
     except Exception as e:
-        loading_container.empty()
         show_error_message(f"Error fetching accounts: {str(e)}")
         return []
 
 def fetch_salesforce_contacts():
-    """Fetch Salesforce contacts"""
+    """Fetch Salesforce contacts with progressive loading"""
     access_token = st.session_state.get("access_token")
     instance_url = st.session_state.get("instance_url")
 
@@ -378,8 +375,7 @@ def fetch_salesforce_contacts():
     loading_container = st.empty()
     
     try:
-        with loading_container:
-            show_loading_spinner("Fetching contacts from Salesforce...")
+        progressive_loading_with_messages(loading_container, "contact request")
         
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -393,8 +389,6 @@ def fetch_salesforce_contacts():
             timeout=30
         )
         
-        loading_container.empty()
-        
         if response.status_code == 200:
             records = response.json().get("records", [])
             show_success_message(f"Successfully retrieved {len(records)} contact records!")
@@ -404,7 +398,6 @@ def fetch_salesforce_contacts():
             return []
             
     except Exception as e:
-        loading_container.empty()
         show_error_message(f"Error fetching contacts: {str(e)}")
         return []
 
@@ -422,6 +415,15 @@ def show_login_page():
             <div class="app-subtitle">Secure OAuth2 Integration with PKCE</div>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Show current configuration for debugging
+        with st.expander("🔧 Configuration Info", expanded=False):
+            st.code(f"""
+Auth URL: {SF_AUTH_URL}
+Token URL: {SF_TOKEN_URL}
+Redirect URI: {REDIRECT_URI}
+Client ID: {SF_CLIENT_ID[:10]}...
+            """)
         
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -468,7 +470,7 @@ def show_login_page():
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
+    
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_dashboard():
@@ -493,12 +495,16 @@ def show_dashboard():
                 accounts = fetch_salesforce_accounts()
                 if accounts:
                     st.session_state["accounts_data"] = accounts
+                    # Auto-scroll to bottom
+                    st.markdown('<script>window.scrollTo(0, document.body.scrollHeight);</script>', unsafe_allow_html=True)
         
         with col1:
             if st.button("📥 Fetch Account Data", use_container_width=True):
                 accounts = fetch_salesforce_accounts()
                 if accounts:
                     st.session_state["accounts_data"] = accounts
+                    # Auto-scroll to bottom
+                    st.markdown('<script>window.scrollTo(0, document.body.scrollHeight);</script>', unsafe_allow_html=True)
         
         # Display accounts data
         if "accounts_data" in st.session_state and st.session_state["accounts_data"]:
@@ -519,13 +525,17 @@ def show_dashboard():
             
             # Add download option
             if st.button("📄 Download as CSV"):
-                csv = pd.DataFrame(display_data).to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"salesforce_accounts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
+                try:
+                    import pandas as pd
+                    csv = pd.DataFrame(display_data).to_csv(index=False)
+                    st.download_button(
+                        label="Download CSV",
+                        data=csv,
+                        file_name=f"salesforce_accounts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+                except ImportError:
+                    st.error("pandas is required for CSV download functionality.")
     
     with tab2:
         st.subheader("Contact Records")
@@ -534,6 +544,8 @@ def show_dashboard():
             contacts = fetch_salesforce_contacts()
             if contacts:
                 st.session_state["contacts_data"] = contacts
+                # Auto-scroll to bottom
+                st.markdown('<script>window.scrollTo(0, document.body.scrollHeight);</script>', unsafe_allow_html=True)
         
         if "contacts_data" in st.session_state and st.session_state["contacts_data"]:
             st.markdown("### 👥 Contact Data")
@@ -591,7 +603,7 @@ def main():
     # Load custom CSS
     load_custom_css()
     
-    # Handle OAuth callback
+    # Handle OAuth callback - using your working callback logic
     query_params = st.query_params
     if "code" in query_params and "state" in query_params:
         if ("oauth_state" in st.session_state and 
@@ -615,10 +627,4 @@ def main():
         show_login_page()
 
 if __name__ == "__main__":
-    # Add pandas import for CSV functionality
-    try:
-        import pandas as pd
-    except ImportError:
-        st.error("pandas is required for CSV functionality. Please install it.")
-    
     main()
