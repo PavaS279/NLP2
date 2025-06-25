@@ -1,6 +1,7 @@
-streamlit>=1.32.0
-pandas
-altair
-snowflake-connector-python
+streamlit
 snowflake-snowpark-python
+pandas
+pyyaml
+altair==5.3.0
 pyarrow<19.0.0
+setuptools<81
